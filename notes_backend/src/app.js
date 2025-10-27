@@ -1,29 +1,39 @@
 const cors = require('cors');
 const express = require('express');
+const dotenv = require('dotenv');
 const routes = require('./routes');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('../swagger');
+const requestLogger = require('./middleware/requestLogger');
+const notFound = require('./middleware/notFound');
+const errorHandler = require('./middleware/errorHandler');
+
+// Load environment variables safely from .env if present
+dotenv.config();
 
 // Initialize express app
 const app = express();
 
+// CORS
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-app.set('trust proxy', true);
-app.use('/docs', swaggerUi.serve, (req, res, next) => {
-  const host = req.get('host');           // may or may not include port
-  let protocol = req.protocol;          // http or https
 
+// Trust proxy for accurate protocol/host with reverse proxies
+app.set('trust proxy', true);
+
+// Swagger UI with dynamic server url based on request
+app.use('/docs', swaggerUi.serve, (req, res, next) => {
+  const host = req.get('host');
+  let protocol = req.protocol;
   const actualPort = req.socket.localPort;
   const hasPort = host.includes(':');
-  
   const needsPort =
     !hasPort &&
     ((protocol === 'http' && actualPort !== 80) ||
-     (protocol === 'https' && actualPort !== 443));
+      (protocol === 'https' && actualPort !== 443));
   const fullHost = needsPort ? `${host}:${actualPort}` : host;
   protocol = req.secure ? 'https' : protocol;
 
@@ -38,19 +48,19 @@ app.use('/docs', swaggerUi.serve, (req, res, next) => {
   swaggerUi.setup(dynamicSpec)(req, res, next);
 });
 
-// Parse JSON request body
+// Basic request logging
+app.use(requestLogger);
+
+// Body parser
 app.use(express.json());
 
-// Mount routes
+// Routes
 app.use('/', routes);
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    status: 'error',
-    message: 'Internal Server Error',
-  });
-});
+// 404 handler for unknown routes
+app.use(notFound);
+
+// Centralized error handler with structured JSON
+app.use(errorHandler);
 
 module.exports = app;

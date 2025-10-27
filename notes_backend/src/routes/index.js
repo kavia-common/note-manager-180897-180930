@@ -1,9 +1,10 @@
 const express = require('express');
 const healthController = require('../controllers/health');
+const notesRouter = require('./notes');
 
 const router = express.Router();
-// Health endpoint
 
+// Health endpoint
 /**
  * @swagger
  * /:
@@ -31,5 +32,22 @@ const router = express.Router();
  *                   example: development
  */
 router.get('/', healthController.check.bind(healthController));
+
+// Notes routes
+router.use('/notes', notesRouter);
+
+// Seed route for basic verification
+router.post('/seed', (req, res) => {
+  /**
+   * Provides a basic dataset for quick manual verification.
+   * Note: This is for demo purposes and will overwrite existing in-memory notes.
+   */
+  const store = require('../store/memoryStore');
+  store.reset([
+    { title: 'Welcome', content: 'Your first note' },
+    { title: 'Second', content: 'Another note' },
+  ]);
+  return res.status(201).json({ message: 'Seeded 2 notes', count: store.getAll().length });
+});
 
 module.exports = router;
